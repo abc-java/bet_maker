@@ -1,0 +1,49 @@
+services:
+  postgres_db:
+    image: postgres:16.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bet_maker
+    volumes:
+      - /home/bet_maker_service/postgreStorage:/var/lib/postgresql/data
+    command: >
+      postgres -c max_connections=1000
+               -c shared_buffers=256MB
+               -c effective_cache_size=768MB
+               -c maintenance_work_mem=64MB
+               -c checkpoint_completion_target=0.7
+               -c wal_buffers=16MB
+               -c default_statistics_target=100
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d bet_maker" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: bash -c "poetry run alembic upgrade head && poetry run python -m app"
+    links:
+      - postgres_db
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - app-network
+    environment:
+      APP_CONFIG_FILE: local
+
+networks:
+  app-network:
+    driver: bridge
